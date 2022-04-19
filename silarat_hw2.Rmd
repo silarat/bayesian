@@ -1,0 +1,307 @@
+---
+title: 'STAT 564: Bayesian Statistics for the Social Sciences'
+subtitle: 'Homework 2'
+author: "Palmy Chomchat Silarat"
+date: "4/12/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(formatR)
+library(tidyverse)
+library(ggplot2)
+library(rethinking)
+
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+
+library(rethinking)
+```
+
+## Chapter 3
+
+1. Using the data we sampled live during Lecture 2, namely (W W W W L W W W L), reproduce the posterior predictive check of the number of switches found in page 67, Figure 3.7 (the second figure).  
+
+```{r}
+wi <- c(1, 1, 1, 1, 0, 1, 1, 1, 0) # had 9 observations (1 = presence of Water)
+
+#grid values for pw
+w <- sum(wi)
+n <- length(wi)
+grid.size <- 1000
+pw <- seq(0, 1, length = grid.size)
+prior <- rep(1, grid.size) #prior
+likelihood.9 <- dbinom(w, size = n, prob = pw)
+post.9 <- prior*likelihood.9
+post.std.9 <- post.9/sum(post.9)
+
+# predictive simulation
+n_sim = 1e4
+
+switches = rep(NA, n_sim)
+
+for (r in 1:n_sim){
+  pw_sim = sample(pw, 1, replace = TRUE, prob = post.9)
+  trials_sim = rbinom(n, 1, pw_sim)
+  switches[r] = length(rle(trials_sim)$lengths) - 1 # built in function
+}
+
+plot(table(switches) / n_sim,
+ xlab = "Number of switches",
+ ylab = "Posterior predictive probability")
+
+
+```
+
+## Chapter 4
+
+yi ~ Normal(mu, sigma) \newline
+mu ~ Normal(0, 10) \newline 
+sigma ~ Exponential(1) \newline 
+
+
+4E1: In the model definition, which line is the likelihood? Answer: Line 1 \newline
+4E2: In the model definition, how many parameters are in the posterior distribution? Answer: Two (mu and sigma) \newline
+4E3: Using the model definition from above, write down the appropriate form of Bayes's theorem that includes the proper likelihood and priors
+$$
+Pr(\beta, \sigma | y) = 
+    \frac{ \Pi_i Normal(y_i|\mu, \sigma) Normal(\mu|0, 10) Exponential(\sigma| 1)}
+    {\int \int \Pi_i Normal(y_i|\mu, \sigma) Normal(\mu|0, 10) Exponential(\sigma| 1) d \mu d \sigma }
+$$
+yi ~ Normal(mu, sigma) \newline
+mu_i = alpha + beta*xi \newline
+alpha ~ Normal(0,10) \newline
+beta ~ Normal(0,1) \newline
+sigma ~ Exponential(2) \newline
+
+4E4: In the model definition, which line is the liniear model? Answer: 2nd line. \newline
+4E5: How many parameters are in the posterior distribution? Answer: 3 (alpha, beta, sigma) mu is not a parameter in the posterior distribution.\newline
+
+yi ~ Normal(mu, sigma) \newline
+mu ~ Normal(0, 10) \newline
+sigma ~ Exponential(1) <- a little confused about this \newline
+
+
+4M1: For the model definition, simulate observed y values from the prior
+
+```{r}
+#this is the prior predictive simulation
+sample_mu <- rnorm( 1e5, 0, 10)
+sample_sigma <- rexp(1e5, 1)
+y_sim <- rnorm(1e5, sample_mu, sample_sigma)
+dens(y_sim)
+```
+I would assume that we are supposed to do 4M1 through 4M7, because 4M7 alone will not make sense. So I will continue with 4M2. \newline
+
+4M2: Translate the model above into a quap formula \newline
+
+mod <- alist( \newline
+y ~ dnorm( mu , sigma ), \newline
+mu ~ dnorm( 0 , 10 ), \newline
+sigma ~ dexp(1) \newline
+) \newline
+
+4M3: Translate the quap model formula below into a mathematical model definition: \newline
+y ~ dnorm(mu, sigma), \newline
+mu <- a + b*x, \newline
+a ~ dnorm(0, 10), \newline
+b ~ dunif(0 , 1), \newline
+sigma ~ dexp(1) \newline
+
+ANSWER: \newline
+y ~ Normal(mu, sigma) \newline
+mu = alpha + sigma * Xi \newline
+alpha ~ Normal(0 ,10) \newline
+beta ~ Uniform(0,1) \newline
+Sigma ~ Exponential(1) \newline
+
+4M4: \newline
+A sample of students is measured for height each year for 3 years. After the third year, you want to fit a linear regression predicting height using year as a predictor. Write down the mathematical model definition for this regression, using any variable names and priors you choose. Be prepared to defend you choice of priors.
+
+I'm going to assume that they are middle school students. Units in metrics.
+Also I feel like we need mixed modeling for this but I haven't learn the Bayesian way yet.. because there are different time points measured on the same subject.
+
+
+y ~ Normal(mu, sigma)  \newline
+mu = alpha + sigma * Xi  \newline
+alpha ~ normal(130, 20)  \newline
+beta ~ uniform(0, 15) Growth rate might be uniform?  \newline
+Sigma ~ uniform(0, 30)  \newline
+
+I think that my organization should typically feed me with a more specific sample, that's why I decided to assume that I am measuring middle school students. For the alpha prior, I chose a normal distribution with a mean of 130cm and a standard deviation of 20. I believe the sd is enough for the variability around the mean for this group of subjects. For the beta prior, I chose a uniform distribution, ranging from 0 to 15, again because in my field of work, I typically get thrown a pretty specific sample, so I can have a prior that is not too conservative. Beta should not be negative in this case, unless we are working with individuals with certain physical disabilities. For the sigma prior, I chose a uniform distribution from 0 cm to 30 cm.
+
+4M5: \newline
+Now suppose I tell you that the every student got taller each year. Does this information lead you to change your choice of priors? How? \newline
+
+This confirms that the sample we are working with are growing students which is likely in middle school. \newline
+
+4M6: \newline
+Now suppose I tell you that the variance among heights for students of the same age is never more than 64cm. How does this lead you to revise your priors?
+
+sigma ~ uniform(0, 64) I'm not too sure about this \newline
+
+4M7: \newline
+Refit model from the chapter but omit the mean weight xbar this time. Compare the new model's posterior to that of the original model. In particular, look at the covariance among the parameters. What is different? then compare the posterior predictions of both models.
+
+
+```{r}
+options(scipen=999)
+data(Howell1); d <- Howell1; d2 <- d[d$age >= 18,]
+xbar <- mean(d2$weight)
+
+m4.3 <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b*(weight - xbar),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)
+    
+  ), data = d2
+)
+#precis(m4.3)
+
+m4.3_again <- quap(
+  alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b*(weight),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)
+    
+  ), data = d2
+)
+#precis(m4.3_again)
+
+
+```
+
+By taking out xbar, we unstandarsized weight. This results in significant changes in the intercept, although there are some minimal changes in the slope. 
+
+
+## 4H1
+
+The weight listed below were recorded inthe !Kung census, but heights were not recorded for these individuals. Provide predicted heights and 89% intervals for each of these individuals, using the model-based predictions.
+
+
+```{r}
+mod <- alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b*(weight - xbar),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)
+    
+)
+
+m <- quap(mod, data = d2)
+
+fourH1_weight <- c(46.95, 43.72, 64.78, 32.59, 54.63)
+fourH1_height <- link(m, data = data.frame(weight = fourH1_weight))
+
+height <- apply(fourH1_height, 2, mean)
+interval <- apply(fourH1_height, 2, HPDI, prob = 0.89)
+
+FourH1 <- data.frame(
+  Individual = c(1,2,3,4,5),
+  weight = fourH1_weight,
+  expected_height = height,
+  Lower_bound = interval[1, ],
+  Upper_bound = interval[2, ]
+)
+
+print(kable(FourH1))
+
+```
+
+## 4H2
+
+A) Fit a linear regression to these data, using quap(). Present and interpret the estimates. For every 10 units of increase in weight, how much taller does the model predict a child gets? \newline
+
+
+```{r}
+d3 <- Howell1 %>% filter(age < 18) #do we use our own prior? I'll assume that we come up with our own prior
+weight_bar <- mean(d2$weight)
+mod4H2 <- alist(
+  height ~ dnorm(mu, sigma),
+  mu <- a + b * (weight - weight_bar),
+  a ~ dnorm(120, 30),
+  b ~ dlnorm(0, 1), #remember that it is dlnorm
+  sigma ~ dunif(0, 40)
+)
+m2 <- quap(mod4H2, data = d3)
+precis(m)
+
+
+
+```
+
+b) Plot the raw data, with height on the vertical axis and weight on the horizontal axis. Superimpose the MAP regression line and 89% HPDI for the mean. Also superimpose the 89% HPDI for predicted heights.
+
+```{r}
+#prepare data for the plot
+weight.seq <- seq(from = min(d3$weight), to = max(d3$weight), by = 1) # sequence to do predictions for
+mu <- link(m, data = data.frame(weight = weight.seq)) # do predictions
+mu.mean <- apply(mu, 2, mean) # calculate mean
+mu.HPDI <- apply(mu, 2, HPDI, prob = 0.89) # identify interval
+sim.height <- sim(m, data = list(weight = weight.seq)) # simulate full predictions
+height.HPDI <- apply(sim.height, 2, HPDI, prob = 0.89) # identify interval
+
+# Plotting
+plot(d3$weight, d3$height, ylab = "Height", xlab = "Weight") # base plot
+lines(weight.seq, mu.mean) # add mean line
+shade(mu.HPDI, weight.seq) # add hdpi interval
+shade(height.HPDI, weight.seq) # add full-hdpi interval
+
+```
+
+## 4H3
+
+Suppose a colleague of yours, who works on allometry, glances at the practice problems just above. Your colleague exclaims, “That’s silly. Everyone knows that it’s only the logarithm of body weight that scales with height!” Let’s take your colleague’s advice and see what happens. \newline
+
+a) Model the relationship between height (cm) and the natural logarithm of weight (log-kg). Use the entire Howell1 data frame, all 544 rows, adults and non-adults. Fit this model, using the quadratic approximation:
+Height \newline
+
+height_i ~ Normal(mu, sigma) \newline
+mu_i = alpha + beta(log(weight_i)) \newline
+alpha ~ Normal(170, 20) \newline
+beta ~ logNormal(0,1) \newline
+sigma ~ Uniform(0, 50) \newline
+
+
+```{r}
+dat <- Howell1
+formula <- alist(
+  height ~ dnorm(mu, sigma), #we use sigma here and not inversed variance because this is not jags
+  mu <- a + b * log(weight),
+  a ~ dnorm(170, 20),
+  b ~ dlnorm(0, 1),
+  sigma ~ dunif(0, 50)
+)
+m <- quap(formula, data = d)
+precis(m)
+```
+
+The predicted height when the weight is 0 log-kg is -22.91. The slope tells us that there is an increase in height of 46.83cm per an increase of 1 in log-kg. Standard deviation around the height is 5.14.\newline
+
+All of these doesn't make much sense so our friend might not have our best interest in mind when suggesting. \newline
+
+b) Begin with this plot: plot(height ~ weight, data = Howell1), col = col.alpha(rangi2, 0.4)). Then use samples from the quadratic approximate posterior of the model in (a) to superimpose on the plot: (1) the predicted mean height as a function of weight, (2) the 97% HPDI for the mean, and (3) the 97% HPDI for predicted heights.
+
+```{r}
+plot(height ~ weight, data = Howell1, col = col.alpha(rangi2, 0.4))
+
+weight.seq <- seq(from = min(dat$weight), to = max(dat$weight), by = 1)
+mu <- link(m, data = data.frame(weight = weight.seq))
+mu.mean <- apply(mu, 2, mean)
+mu.HPDI <- apply(mu, 2, HPDI, prob = 0.97)
+lines(weight.seq, mu.mean)
+shade(mu.HPDI, weight.seq)
+# Estimate and plot the 97% HPDI for the predicted heights
+sim.height <- sim(m, data = list(weight = weight.seq))
+height.HPDI <- apply(sim.height, 2, HPDI, prob = 0.97)
+shade(height.HPDI, weight.seq)
+```
+
